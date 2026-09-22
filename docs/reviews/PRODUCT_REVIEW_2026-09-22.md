@@ -76,4 +76,4 @@ flowchart LR
 - 依赖审计为 0 个已知漏洞。公开内容检查排除数据库、凭据、备份、邮件及原始用户附件；不能据此替代完整安全审计。
 - 已创建 [公开仓库](https://github.com/jayson2hu/open-product-radar) 和 main/develop 分支，加入构建、自动测试、浏览器与独立容器检查；云端执行结果见 [Actions](https://github.com/jayson2hu/open-product-radar/actions)。
 
-真实 OAuth、邮件、跨天采集、目标服务器部署及经营验证仍需按前述验收条件完成。容器云端检查与本机 Node 预览分别记录，不把配置存在当作实际部署成功。
+云端 [运行 35708116908](https://github.com/jayson2hu/open-product-radar/actions/runs/35708116908) 的应用检查和容器检查均通过：包括镜像构建、非 root 生产启动、健康、演示登录禁用及重启数据保留。真实 OAuth、邮件、跨天采集、目标服务器部署及经营验证仍需按前述验收条件完成。

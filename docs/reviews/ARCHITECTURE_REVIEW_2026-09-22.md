@@ -44,6 +44,6 @@ HTTP 缓存条数是按地址去重的缓存数量，不是精确 HTTP 请求次
 
 备份、删除台账及邮件预览包含敏感资料，需要操作系统访问控制和受控保留。当前并未建立自动异地备份、数据库加密、容灾切换或生产 RPO/RTO 保证；本机恢复测试不能代替目标部署环境演练。
 
-Docker/Compose 已具备固定镜像版本、非 root 用户、独立命名卷、本机端口绑定、网页健康检查、显式 worker profile 和预算/超时参数；worker 不继承网页 HTTP 探针，默认只入邮件队列。当前机器没有可用 Docker，不重复探测，也未声称 compose config、镜像构建或容器健康已验证。参见 `docs/CONTAINERS.md` 及容器核查产物。
+Docker/Compose 已具备固定镜像版本、非 root 用户、独立命名卷、本机端口绑定、网页健康检查、显式 worker profile 和预算/超时参数；worker 不继承网页 HTTP 探针，默认只入邮件队列。本机没有 Docker；最终集成在 GitHub Actions Ubuntu 独立环境验证了 Compose、镜像构建、非 root 生产启动、健康、认证边界和重启持久性，见 [运行记录](https://github.com/jayson2hu/open-product-radar/actions/runs/35708116908)。真实采集、邮件及目标服务器部署仍未由此覆盖。
 
 本轮保持单机试点范围。PostgreSQL、多实例写入、自动扩缩容、完整外部可观测平台、真实 OAuth 和邮件供应商验收仍需对应环境完成，不能由本次源码审查替代。

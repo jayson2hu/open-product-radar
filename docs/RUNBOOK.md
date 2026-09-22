@@ -59,4 +59,4 @@ npm run restore -- backups/unique-name.sqlite data/restored-demo.sqlite --curren
 
 `docker compose --env-file .env -f infra/compose.yml up --build -d web`，反向代理终止 TLS，保留 localhost 服务端口。需要采集时明确启用 `--profile collection`。容器限制权限、使用非 root 用户、固定 Node 镜像版本和持久卷。邮件默认为 outbox，不会因打开采集 profile 开始外发。
 
-Docker 配置已提供但需要目标环境实测。当前没有 PostgreSQL、多实例写入、自动模型服务或完整可观测平台。发布前逐项核查来源权限、真实登录/邮件、隐私条款、备份、DNS/TLS、备案/经营主体及退款流程。
+Docker 已通过云端独立构建、健康、非 root、生产认证边界和重启持久性检查，详见容器验证文档；仍需目标环境部署及恢复实测。当前没有 PostgreSQL、多实例写入、自动模型服务或完整可观测平台。发布前逐项核查来源权限、真实登录/邮件、隐私条款、备份、DNS/TLS、备案/经营主体及退款流程。

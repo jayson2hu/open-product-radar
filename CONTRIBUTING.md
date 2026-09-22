@@ -20,4 +20,4 @@ npm run test:e2e
 
 数据库、备份、日志、采集产物、个人配置和原始需求附件由 `.gitignore` 排除。不要强制加入忽略文件；使用 `.env.example` 描述配置项，真实凭据留在本地环境。
 
-GitHub Actions 在 `main`、`develop` 的推送及 Pull Request 上验证公开内容、构建、自动测试和隔离浏览器流程。云端检查不代表 Docker、真实 OAuth、邮件或正式部署已经通过验收。
+GitHub Actions 在 `main`、`develop` 的推送及 Pull Request 上验证公开内容、构建、自动测试和隔离浏览器流程，并独立构建生产镜像，检查非 root、健康、认证边界及重启持久性。容器测试使用专用临时卷，不启用采集和外发；它不能替代真实 OAuth、邮件或目标服务器的正式验收。

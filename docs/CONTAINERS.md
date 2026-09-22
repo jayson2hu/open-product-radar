@@ -1,6 +1,8 @@
 # 容器运行与验证边界
 
-已提供 Docker 多阶段构建和 Compose 配置。当前实际运行及接口、页面测试使用本机 Node.js；截至 2026-09-22，本机找不到 Docker CLI，标准 Docker Desktop 安装路径也不存在，因此尚未运行 `docker compose config`、镜像构建或容器健康检查。配置审查记录位于 `artifacts/container-readiness-2026-09-22.json`。不能将已有本机测试写成容器部署通过。
+已提供 Docker 多阶段构建和 Compose 配置。本机没有 Docker，当前页面使用 Node.js 运行；2026-09-22 已在 GitHub Actions 的 Ubuntu 环境实际完成独立容器验证，见 [运行记录](https://github.com/jayson2hu/open-product-radar/actions/runs/35708116908)（代码提交 `48ef3cf`）。云端验证与正式服务器部署分别验收。
+
+已通过：无凭据 Compose 配置校验、生产镜像构建、非 root 进程、空生产库、演示登录拒绝、容器健康、进程重启及命名卷中的 SQLite 数据保留。测试容器禁用外部网络、没有发布宿主端口，不启动采集或外发邮件；结束后删除专用测试容器和卷。未验证目标服务器的 TLS/OAuth、真实采集网络、邮件或生产恢复。
 
 ## 配置内容
 

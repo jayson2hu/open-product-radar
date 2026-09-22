@@ -53,7 +53,7 @@ npm run worker -- --once
 npm run backup
 ```
 
-端到端测试使用已安装的 Chrome/Edge，或通过 `RADAR_BROWSER_PATH` 指定浏览器。测试在独立内存/临时数据库运行，不覆盖日常数据。部署材料位于 `infra`；Docker 构建和真实第三方登录、发信仍需在对应环境实测。
+端到端测试使用已安装的 Chrome/Edge、Playwright Chromium，或通过 `RADAR_BROWSER_PATH` 指定浏览器。测试在独立内存/临时数据库运行，不覆盖日常数据。部署材料位于 `infra`；Docker 构建、健康和重启持久性已通过云端独立检查，真实第三方登录、发信和目标服务器仍需对应环境实测。
 
 - [产品范围和数据说明](docs/PRODUCT_SCOPE.md)
 - [实施决策和技术边界](docs/DECISIONS.md)
