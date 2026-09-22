@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.env*
+!.env.example
+data/
+backups/
+.npm-cache/
+artifacts/
+**/*.sqlite
+**/*.sqlite-*
+**/*.db
+**/*.db-*
+**/*.eml
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+__pycache__/
+.pytest_cache/
+.codex/
+.agents/
+# The original user-provided planning attachment stays local.
+docs/PRODUCT_SPEC.md
+*.log

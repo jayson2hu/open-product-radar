@@ -1,0 +1,63 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    ports:
+      - "127.0.0.1:${RADAR_HOST_PORT:-4188}:4188"
+    environment:
+      RADAR_MODE: production
+      HOST: 0.0.0.0
+      PORT: "4188"
+      RADAR_PUBLIC_URL: ${RADAR_PUBLIC_URL:-https://radar.example.com}
+      RADAR_DB_PATH: /app/data/radar-production.sqlite
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      RADAR_ADMIN_GITHUB_IDS: ${RADAR_ADMIN_GITHUB_IDS:-}
+    volumes:
+      - radar-data:/app/data
+      - radar-backups:/app/backups
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    profiles: [collection]
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 120s
+    depends_on:
+      web:
+        condition: service_healthy
+    # The worker has no HTTP listener. Do not inherit the web image's probe.
+    healthcheck:
+      disable: true
+    command: ["node", "workers/run.mjs", "--collect"]
+    environment:
+      RADAR_MODE: production
+      RADAR_DB_PATH: /app/data/radar-production.sqlite
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      RADAR_GITHUB_REPOSITORIES: ${RADAR_GITHUB_REPOSITORIES:-microsoft/playwright}
+      RADAR_GITHUB_TIMEOUT_MS: ${RADAR_GITHUB_TIMEOUT_MS:-30000}
+      RADAR_DAILY_REQUEST_LIMIT: ${RADAR_DAILY_REQUEST_LIMIT:-1000}
+      RADAR_MONTHLY_REQUEST_LIMIT: ${RADAR_MONTHLY_REQUEST_LIMIT:-20000}
+      RADAR_WORKER_INTERVAL_MS: ${RADAR_WORKER_INTERVAL_MS:-30000}
+      RADAR_PUBLIC_URL: ${RADAR_PUBLIC_URL:-https://radar.example.com}
+      RADAR_EMAIL_MODE: outbox
+    volumes:
+      - radar-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 384m
+volumes:
+  radar-data:
+  radar-backups:
