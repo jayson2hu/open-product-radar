@@ -30,7 +30,7 @@ try {
   assert.equal(await page.locator('.repo-row').count(), 8);
   assert.ok(await page.getByText('演示数据 · 非实时榜单', { exact: true }).isVisible());
   assert.ok(await page.locator('.repo-row').filter({ hasText: 'Cypress' }).getByText('-13', { exact: true }).isVisible());
-  assert.ok(await page.locator('.repo-row').filter({ hasText: 'DrissionPage' }).getByText('历史不足', { exact: true }).isVisible());
+  assert.ok(await page.locator('.repo-row').filter({ hasText: 'DrissionPage' }).getByText('待对比', { exact: true }).isVisible());
   await page.screenshot({ path: 'artifacts/discovery-desktop.png', fullPage: true });
   passed('Anonymous discovery clearly identifies demo, negative growth and missing history');
 
@@ -95,6 +95,18 @@ try {
 
   await page.goto(`${base}/#admin`);
   await page.getByRole('heading', { name: '让研究持续可靠地运行。', exact: true }).waitFor();
+  const sessionInfo = await (await context.request.get(`${base}/api/v1/session`)).json();
+  app.db.prepare("UPDATE users SET role='editor' WHERE id=?").run(sessionInfo.user.id);
+  await page.reload();
+  await page.getByRole('heading', { name: '让研究持续可靠地运行。', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '成本与试点', exact: true }).count(), 0);
+  for (const button of await page.getByRole('button', { name: /^(审核并启用|暂停来源|重试)$/ }).all()) {
+    assert.equal(await button.isEnabled(), false);
+  }
+  app.db.prepare("UPDATE users SET role='admin' WHERE id=?").run(sessionInfo.user.id);
+  await page.reload();
+  await page.getByRole('button', { name: '成本与试点', exact: true }).waitFor();
+  passed('Editor operations do not offer administrator-only finance or source controls');
   await page.screenshot({ path: 'artifacts/admin-desktop.png', fullPage: true });
   passed('Authorized operations dashboard loads source and review data');
 

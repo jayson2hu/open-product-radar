@@ -17,7 +17,7 @@ User: `{id,name,email,role:'user'|'editor'|'admin',email_opt_in}`。
 ## 公开
 
 - GET `/health` 返回 `{status,mode,version}`
-- GET `/session` 返回 `{user:null|User,mode:'demo'|'production',csrf_token?}`
+- GET `/session` 返回 `{user:null|User,mode:'demo'|'production',csrf_token?,capabilities:{auth:{github_enabled,demo_enabled,login_available,unavailable_reason?},collection_scope:{kind:'curated_public_repositories',automatic_discovery:false,realtime:false}}}`。能力字段不包含密钥；登录不可用时页面解释当前可浏览范围。
 - POST `/auth/demo` 创建独立演示账户，返回 `{user}`；POST `/auth/logout`
 - GET `/auth/github` 与 `/auth/github/callback` 生产 OAuth
 - GET `/feed?period=24h|7d&topic=&language=&q=&kind=` 返回 `{data:Entity[],events:Event[],stats:{repositories,products,events,sources},as_of,coverage,warnings,mode}`
@@ -52,6 +52,15 @@ User: `{id,name,email,role:'user'|'editor'|'admin',email_opt_in}`。
 - PATCH `/admin/budget` `{daily_limit,monthly_limit}`
 
 首版响应添加字段保持向后兼容。用户界面不根据缺少字段自行推断事实。演示数据库和实采数据库用独立路径，禁止混合排名。
+
+### 2026-09-22 检查后补充
+
+- `/feed` 增加 `content_status:{repositories,products,published_events,pending_events,pending_release_events}`；实体详情也提供与该实体对应的事件计数及 `collection`。待审内容只公开计数，正文仍需编辑权限。
+- 列表响应增加 `sort:{requested,effective,period,comparable_count}`，页面按服务端实际排序解释。缺少增长对照时不得显示增长名次。
+- 比较单元格存在不同版本、套餐或条件的判断时，返回 `status:'unknown'`、范围提示和 `variants:[{id,status,value,scope,evidence_ids}]`，不任取第一条结论。
+- `/admin/overview` 增加 `capabilities.business_admin`。编辑可处理内容，但 `costs/orders/outbox` 为空、`budget` 为 null，用户与经营统计及相关审计不返回。来源启停、任务重试、删除、订单与预算变更仅管理员可执行。
+- 每次身份校验都按当前管理员 GitHub 数值 ID 名单核对权限；移除名单后旧会话不保留管理员身份。
+- 多来源内容只有在全部引用均可展示时才能公开。公开关系不返回内部审核 `reason`。
 
 ## 编辑录入（已落地）
 

@@ -30,7 +30,7 @@ const entityLink = repository => typeof repository.id === 'string' && repository
   ? `/#entity/${encodeURIComponent(repository.id)}` : null;
 const delta = value => typeof value === 'number' && Number.isFinite(value)
   ? `<strong class="${value < 0 ? 'negative' : value > 0 ? 'positive' : ''}">${value > 0 ? '+' : ''}${count(value)}</strong>`
-  : '<span class="history">历史不足</span>';
+  : '<span class="history">待对比</span>';
 
 function releaseCard(release) {
   const status = ({ pending: '待审核', draft: '待审核', published: '已审核发布', approved: '已审核', reviewed: '已核查', rejected: '审核未通过', retracted: '已撤回' })[release.review_status];
@@ -83,8 +83,8 @@ export function renderCollectionReport(report) {
 <main class="container"><div class="eyebrow">A REAL OBSERVATION, WITH CLEAR LIMITS</div><div class="hero"><div><h1>今天，从真实数据开始。</h1><p>查看本次采集到的公开仓库、观察快照与版本记录。每一个数字都有观察时间，每一条版本记录都保留原始出处。</p></div><a class="button" href="/#discover">返回发现页 <span aria-hidden="true">→</span></a></div>
 <div class="collection-status"><span class="real-badge">真实采集记录</span><span class="status-dot" aria-hidden="true"></span><span>${escapeHtml(status)}</span><span class="separator">/</span><span>全部时间为北京时间 UTC+8</span></div>
 <section class="summary" aria-label="本地真实资料库当前记录统计">${summary.map(([label, value, caption]) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value">${count(value)}</div><p class="stat-caption">${caption}</p></div>`).join('')}</section>
-<dl class="collection-metadata"><div><dt>开始采集</dt><dd>${escapeHtml(time(report.started_at))}</dd></div><div><dt>完成采集</dt><dd>${escapeHtml(time(report.completed_at))}</dd></div><div><dt>接口响应</dt><dd>${count(report.request_count)} <span>条已保存的成功响应</span></dd></div><div><dt>展示仓库数</dt><dd>${repositories.length}</dd></div><div class="scope"><dt>采集范围</dt><dd>${escapeHtml(scope)}</dd></div></dl>
-<aside class="boundary-note" aria-label="数据边界"><h2>先读清楚这次数据的边界</h2><p>这是一次手动执行的采集结果，尚未启用持续采集；不是全量 GitHub 数据，也不是 GitHub Trending。上方统计为本地真实资料库的当前记录数，“接口响应”仅计本轮已保存的成功响应，不包含失败尝试。版本的原始发布时间可以早于今天；本次发现不等于今天首次发布。首次观察没有足够的历史快照时，24 小时与 7 天净变化显示“历史不足”，不会用零补齐。版本草稿须经审核后才可作为公开研究判断；Star 数不代表用户量、收入或产品质量。</p></aside>
+<dl class="collection-metadata"><div><dt>开始采集</dt><dd>${escapeHtml(time(report.started_at))}</dd></div><div><dt>完成采集</dt><dd>${escapeHtml(time(report.completed_at))}</dd></div><div><dt>已缓存接口</dt><dd>${count(report.cached_endpoint_count ?? report.request_count)} <span>条不同接口的成功记录</span></dd></div><div><dt>展示仓库数</dt><dd>${repositories.length}</dd></div><div class="scope"><dt>采集范围</dt><dd>${escapeHtml(scope)}</dd></div></dl>
+<aside class="boundary-note" aria-label="数据边界"><h2>先读清楚这次数据的边界</h2><p>这是一次手动执行的采集结果，尚未启用持续采集；不是全量 GitHub 数据，也不是 GitHub Trending。上方统计为本地真实资料库的当前记录数，“已缓存接口”按接口地址去重，不代表实际请求次数。版本的原始发布时间可以早于今天；本次发现不等于今天首次发布。当前 Star 总量已经采集；缺少约 24 小时或 7 天前的记录时，净变化显示“待对比”。需要之后再采集才能计算增长，仅等待时间过去不会自动补齐。版本草稿须经审核后才可作为公开研究判断；Star 数不代表用户量、收入或产品质量。</p></aside>
 <section aria-labelledby="repositories-title"><div class="section-heading"><h2 id="repositories-title">本次采集到的项目</h2><p>按报告原有顺序呈现 · 非热度排名</p></div>${repositories.length ? `<div class="repository-grid">${repositories.map(repositoryCard).join('')}</div>` : '<div class="empty">本次报告尚无成功采集的仓库记录，请查看采集状态与失败原因。</div>'}</section>
 ${failures.length ? `<section class="failures" aria-labelledby="failures-title"><h2 id="failures-title">未完成的采集</h2><p>以下对象的结果可能不完整；采集失败不代表项目没有变化。</p>${failures.map(failure => `<article class="failure"><strong>${escapeHtml(failure.repository || '未提供仓库名称')}</strong><span class="failure-status">${escapeHtml(failure.status ?? '状态未提供')}</span><p>${escapeHtml(failure.error || '未提供失败详情')}</p></article>`).join('')}</section>` : ''}
 <footer class="footer"><p>开源产品雷达 · 本页保存本次采集的静态结果，不会自动刷新。字段缺失显示“暂无信息”或“—”；请结合原始出处、采集时间和后续核查使用。</p><a href="/#discover">进入研究工作台 <span aria-hidden="true">↗</span></a></footer></main></body></html>`;

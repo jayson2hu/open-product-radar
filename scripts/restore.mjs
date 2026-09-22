@@ -68,6 +68,7 @@ export function restoreDatabase({ backup, target, current, deletions }) {
     } finally { db.close(); }
   }
   if (!latest || !Array.isArray(latest.accounts) || !Array.isArray(latest.evidence)) throw new Error('Invalid deletion ledger');
+  if (!['demo','production'].includes(latest.mode) || latest.mode !== manifest.mode) throw new Error('Latest deletion ledger mode must match the backup; regenerate a ledger with mode or use --current');
   const ledger = { evidence: [...(manifest.deletions?.evidence || []), ...latest.evidence], accounts: [...(manifest.deletions?.accounts || []), ...latest.accounts] };
   mkdirSync(dirname(targetPath), { recursive: true });
   copyFileSync(backupPath, targetPath, constants.COPYFILE_EXCL);

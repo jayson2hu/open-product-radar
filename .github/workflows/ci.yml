@@ -29,3 +29,118 @@ jobs:
       - name: Install browser for isolated UI checks
         run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SMOKE_IMAGE: open-product-radar:ci-${{ github.run_id }}-${{ github.run_attempt }}
+      SMOKE_CONTAINER: radar-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      SMOKE_VOLUME: radar-ci-data-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose without credentials
+        run: docker compose --env-file /dev/null -f infra/compose.yml config --quiet
+      - name: Build production image
+        run: docker build --file infra/Dockerfile --tag "$SMOKE_IMAGE" .
+      - name: Verify isolated production container and restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker volume create "$SMOKE_VOLUME"
+          docker run --detach --name "$SMOKE_CONTAINER" \
+            --init --network none --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --mount "type=volume,source=$SMOKE_VOLUME,target=/app/data" \
+            --env RADAR_MODE=production \
+            --env RADAR_DB_PATH=/app/data/radar-production.sqlite \
+            --env RADAR_PUBLIC_URL=https://radar.invalid \
+            --env RADAR_EMAIL_MODE=outbox \
+            "$SMOKE_IMAGE"
+
+          wait_for_health() {
+            for attempt in $(seq 1 60); do
+              state=$(docker inspect --format '{{.State.Status}}' "$SMOKE_CONTAINER")
+              health=$(docker inspect --format '{{.State.Health.Status}}' "$SMOKE_CONTAINER")
+              if [ "$state" != running ]; then
+                docker logs "$SMOKE_CONTAINER"
+                return 1
+              fi
+              if [ "$health" = healthy ]; then return 0; fi
+              if [ "$health" = unhealthy ]; then return 1; fi
+              sleep 2
+            done
+            echo 'Container did not become healthy within 120 seconds.' >&2
+            return 1
+          }
+
+          wait_for_health
+          test "$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$SMOKE_CONTAINER")" = none
+          published=$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$SMOKE_CONTAINER")
+          test "$published" = null || test "$published" = '{}'
+          test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Name}}{{end}}{{end}}' "$SMOKE_CONTAINER")" = "$SMOKE_VOLUME"
+
+          docker exec -i "$SMOKE_CONTAINER" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import { DatabaseSync } from 'node:sqlite';
+
+          assert.notEqual(process.getuid(), 0, 'Container commands must run as non-root');
+          const initUid = /^Uid:\s+(\d+)/m.exec(readFileSync('/proc/1/status', 'utf8'));
+          assert.ok(initUid, 'PID 1 uid must be observable');
+          assert.notEqual(Number(initUid[1]), 0, 'Container PID 1 must run as non-root');
+          const origin = 'http://127.0.0.1:4188';
+          const healthResponse = await fetch(origin + '/api/v1/health');
+          assert.equal(healthResponse.status, 200);
+          const health = await healthResponse.json();
+          assert.equal(health.status, 'ok');
+          assert.equal(health.mode, 'production');
+          const session = await (await fetch(origin + '/api/v1/session')).json();
+          assert.equal(session.mode, 'production');
+          assert.equal(session.user, null);
+          assert.equal(session.capabilities.auth.demo_enabled, false);
+          assert.equal(session.capabilities.auth.github_enabled, false);
+          const feed = await (await fetch(origin + '/api/v1/feed')).json();
+          assert.equal(feed.mode, 'production');
+          assert.deepEqual(feed.data, [], 'A fresh production volume must not contain demo data');
+          const demo = await fetch(origin + '/api/v1/auth/demo', {
+            method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}',
+          });
+          assert.equal(demo.status, 404, 'Same-origin demo login must be unavailable in production');
+          assert.equal((await demo.json()).error.code, 'NOT_FOUND');
+          const db = new DatabaseSync(process.env.RADAR_DB_PATH);
+          assert.equal(db.prepare("SELECT value FROM database_meta WHERE key='mode'").get().value, 'production');
+          db.prepare('INSERT INTO database_meta(key,value) VALUES(?,?)').run('ci-container-persistence', 'isolated-smoke-marker');
+          db.close();
+          console.log('Production health, non-root execution, empty data and demo-auth rejection passed.');
+          NODE
+
+          initial_start=$(docker inspect --format '{{.State.StartedAt}}' "$SMOKE_CONTAINER")
+          docker restart --time 30 "$SMOKE_CONTAINER"
+          wait_for_health
+          test "$(docker inspect --format '{{.State.StartedAt}}' "$SMOKE_CONTAINER")" != "$initial_start"
+          docker exec -i "$SMOKE_CONTAINER" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { DatabaseSync } from 'node:sqlite';
+          const response = await fetch('http://127.0.0.1:4188/api/v1/health');
+          assert.equal(response.status, 200);
+          const health = await response.json();
+          assert.equal(health.status, 'ok');
+          assert.equal(health.mode, 'production');
+          assert.notEqual(process.getuid(), 0);
+          const db = new DatabaseSync(process.env.RADAR_DB_PATH, { readOnly: true });
+          assert.equal(db.prepare("SELECT value FROM database_meta WHERE key='mode'").get().value, 'production');
+          assert.equal(db.prepare("SELECT value FROM database_meta WHERE key='ci-container-persistence'").get().value, 'isolated-smoke-marker');
+          db.close();
+          console.log('Restart health and named-volume persistence passed.');
+          NODE
+      - name: Container failure diagnostics
+        if: failure()
+        run: |
+          docker logs "$SMOKE_CONTAINER" || true
+          docker inspect --format '{{json .State}}' "$SMOKE_CONTAINER" || true
+      - name: Remove isolated container and volume
+        if: always()
+        run: |
+          docker rm --force "$SMOKE_CONTAINER" || true
+          docker volume rm --force "$SMOKE_VOLUME" || true

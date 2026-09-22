@@ -48,10 +48,11 @@ export function claimJob(db, { now = new Date(), leaseMs = 120_000, maxAttempts 
       AND NOT EXISTS(SELECT 1 FROM worker_leases occupied JOIN jobs running ON running.id=occupied.job_id WHERE running.source_id=j.source_id AND occupied.lease_until>?)
       ORDER BY j.next_run_at,j.id LIMIT 1`).get(maxAttempts, now.toISOString(), now.toISOString(), now.toISOString(), now.toISOString());
     if (!job) return null;
+    const leaseOwner = `${workerId}:${randomUUID()}`;
     db.prepare('INSERT INTO worker_leases(job_id,owner,lease_until) VALUES(?,?,?) ON CONFLICT(job_id) DO UPDATE SET owner=excluded.owner,lease_until=excluded.lease_until')
-      .run(job.id, workerId, new Date(now.getTime() + leaseMs).toISOString());
+      .run(job.id, leaseOwner, new Date(now.getTime() + leaseMs).toISOString());
     db.prepare("UPDATE jobs SET status='running',attempts=attempts+1,last_run_at=?,last_error=NULL WHERE id=?").run(now.toISOString(), job.id);
-    return { ...job, attempts: job.attempts + 1, lease_owner: workerId };
+    return { ...job, attempts: job.attempts + 1, lease_owner: leaseOwner };
   });
 }
 

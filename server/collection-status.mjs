@@ -48,10 +48,11 @@ function resultStatus(counts, hasData) {
 /** Read-only projection. Source permission, past collection results and worker
  * liveness are different facts; neither a queued job nor source approval is a
  * heartbeat. Per-source last_error and the parent cycle are not per-repo truth. */
-export function getCollectionStatus(db, { now = Date.now() } = {}) {
+export function getCollectionStatus(db, { now = Date.now(), sourceIds = null } = {}) {
   const observedTime = now instanceof Date ? now.getTime() : typeof now === 'string' ? time(now) : now;
   const nowMs = Number.isFinite(observedTime) ? observedTime : Date.now();
-  const sourceRows = db.prepare('SELECT * FROM sources ORDER BY id').all();
+  const selectedSources=sourceIds===null?null:new Set(sourceIds);
+  const sourceRows = db.prepare('SELECT * FROM sources ORDER BY id').all().filter(source=>selectedSources===null||selectedSources.has(source.id));
   const hasLeases = !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='worker_leases'").get();
   const leases = new Map(hasLeases ? db.prepare('SELECT job_id,lease_until FROM worker_leases').all().map(row => [row.job_id, time(row.lease_until)]) : []);
   const grouped = new Map();
@@ -75,13 +76,13 @@ export function getCollectionStatus(db, { now = Date.now() } = {}) {
     for (const job of jobs) {
       counts.total++;
       if (job.status === 'completed') counts.success++;
-      else if (job.status === 'running' && (leases.get(job.id) || 0) > nowMs && source.status !== 'blocked') counts.running++;
+      else if (job.status === 'running' && (leases.get(job.id) || 0) > nowMs && !['blocked', 'revoked'].includes(source.status)) counts.running++;
       else if (job.status === 'failed' || (job.status === 'retry' && job.last_error)) {
         counts.failed++; failures.push(failure(job));
         if (job.status === 'retry') counts.pending_retry++;
       } else counts.pending++;
     }
-    const blocked = source.status === 'blocked';
+    const blocked = ['blocked', 'revoked'].includes(source.status);
     const records = blocked ? null : retained.get(source.id);
     const retainedEntities = Number(records?.total || 0), retainedRepositories = Number(records?.repositories || 0);
     const status = blocked ? 'blocked' : resultStatus(counts, retainedEntities > 0);
@@ -116,7 +117,7 @@ export function getCollectionStatus(db, { now = Date.now() } = {}) {
   });
   const counts = emptyCounts();
   for (const source of sources) for (const field of Object.keys(counts)) counts[field] += source.counts[field];
-  const dataSourceCount = sources.filter(source => source.status !== 'blocked' && source.retained_entities > 0).length;
+  const dataSourceCount = sources.filter(source => !['blocked', 'revoked'].includes(source.status) && source.retained_entities > 0).length;
   const status = sources.length && sources.every(source => source.status === 'blocked') ? 'blocked'
     : sources.some(source => source.status === 'blocked') ? 'partial_failure' : resultStatus(counts, dataSourceCount > 0);
   return { status, summary: sources.map(source => source.summary).join('。'), counts,

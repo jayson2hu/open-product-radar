@@ -22,7 +22,7 @@ npm start
 
 ## 已实现的使用路径
 
-- 发现：24 小时 / 7 天仓库样本，搜索、主题和语言筛选，负增长与历史不足，产品事件和来源范围。
+- 发现：24 小时 / 7 天仓库样本，搜索、主题和语言筛选，负增长与待对比说明，实际排序口径、产品事件和来源范围。
 - 档案：项目/产品、版本套餐、范围化能力与限制、关联关系、原始证据、核查时间。
 - 研究：私有任务与条件、2–5 项候选对比、逐格证据、未知状态、私有笔记与采用判断。
 - 跟踪：关注原因、事件偏好、频率、暂停/已读/取消，站内摘要与邮件预览队列。
@@ -31,7 +31,7 @@ npm start
 
 ## 正式模式配置
 
-复制 `.env.example` 为 `.env`，将 `RADAR_MODE` 改为 `production`，使用新的数据库路径及 HTTPS `RADAR_PUBLIC_URL`。配置 GitHub OAuth Client ID/Secret、回调 `/api/v1/auth/github/callback` 和管理员 GitHub 数值 ID。缺少配置时生产登录会明确报错，不开放演示登录。
+复制 `.env.example` 为 `.env`，将 `RADAR_MODE` 改为 `production`，使用新的数据库路径及 HTTPS `RADAR_PUBLIC_URL`。配置 GitHub OAuth Client ID/Secret、回调 `/api/v1/auth/github/callback` 和管理员 GitHub 数值 ID。缺少配置时页面提供登录说明和公开浏览入口，不开放演示登录。
 
 在后台核对来源条款并批准权限后，设置 `RADAR_GITHUB_REPOSITORIES`，执行：
 
@@ -39,7 +39,7 @@ npm start
 npm run worker -- --once --collect
 ```
 
-实际采集只访问 GitHub 官方公开仓库与版本 API。快照持久保存，版本事件等待人工审核；第一轮没有历史基准时显示历史不足。Worker 不由用户页面请求触发。
+实际采集只访问 GitHub 官方公开仓库与版本 API。快照持久保存，版本事件等待人工审核；第一轮显示“待对比：缺少早期记录”。24h/7d 增长需要后续记录和对应时间的历史基准。持续调度使用 `npm run worker -- --collect`，须由运行环境保持进程；只执行一轮后等待不会自动补齐数据。Worker 不由用户页面请求触发。
 
 邮件默认 `preview`，只写本地预览；`outbox` 只保留队列。真实发信需明确配置供应商、发件域名、HTTPS 地址与开关，并取得用户独立订阅。开发过程中不会发外部邮件。详见运行手册。
 
@@ -62,5 +62,7 @@ npm run backup
 - [测试记录与范围](docs/TEST_PLAN.md)、[交付状态](docs/DELIVERY_STATUS.md)
 - [运营流程](docs/OPERATIONS.md)、[访谈、试用、成本与付费验证](docs/VALIDATION_PLAN.md)
 - [容器配置与验证边界](docs/CONTAINERS.md)
+- [开发与提交约定](CONTRIBUTING.md)
+- [2026-09-22 全面产品检查与修复](docs/reviews/PRODUCT_REVIEW_2026-09-22.md)
 
 未接入自动 AI 研究、自动支付、任意 URL 爬虫、团队共享或全网发现。没有完成公开商业上线，也没有虚构访谈、付款、续费和商业验证结果。

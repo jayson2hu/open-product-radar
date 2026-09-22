@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, chmodSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -9,7 +9,8 @@ function rowsIfPresent(db, table) {
 }
 
 export function readDeletionLedger(db) {
-  return { evidence: rowsIfPresent(db, 'deletion_tombstones'), accounts: rowsIfPresent(db, 'account_deletions') };
+  return { mode: db.prepare("SELECT value FROM database_meta WHERE key='mode'").get()?.value,
+    evidence: rowsIfPresent(db, 'deletion_tombstones'), accounts: rowsIfPresent(db, 'account_deletions') };
 }
 
 export function backupDatabase({ source, target, now = new Date() }) {
@@ -24,6 +25,7 @@ export function backupDatabase({ source, target, now = new Date() }) {
     if (check.integrity_check !== 'ok') throw new Error('Database integrity check failed');
     // VACUUM INTO includes committed WAL data and produces a standalone consistent snapshot.
     db.prepare('VACUUM INTO ?').run(targetPath);
+    chmodSync(targetPath, 0o600);
   } finally { db.close(); }
   const snapshot = new DatabaseSync(targetPath, { readOnly: true });
   try {

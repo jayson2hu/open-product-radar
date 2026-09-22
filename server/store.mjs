@@ -1,33 +1,49 @@
 import { createHash } from 'node:crypto';
 import { json, transaction, now } from './db.mjs';
 import { calculateTrends } from '../workers/trends.mjs';
+import { evidenceSet, metadataBlockedSQL, getContentStatus } from './evidence-policy.mjs';
+import { getCollectionStatus } from './collection-status.mjs';
 
-const liveEvidence = (db, table, key, id) => db.prepare(`SELECT e.id FROM evidence e JOIN ${table} x ON x.evidence_id=e.id LEFT JOIN sources s ON s.id=e.source_id WHERE x.${key}=? AND e.review_status='published' AND e.permission_status IN ('approved','permitted','demo') AND (s.id IS NULL OR s.status!='blocked')`).all(id).map(x=>x.id);
+const liveEvidence = (db, table, key, id) => evidenceSet(db,table,key,id).ids;
+export function publicEntityRow(row) {
+  const blocked=!!row.metadata_blocked,extra=json(row.extra_json,{});
+  const safeExtra=extra&&typeof extra==='object'&&!Array.isArray(extra)?extra:{};
+  const {extra_json,metadata_blocked,...core}=row;
+  const tags=Array.isArray(safeExtra.tags)?safeExtra.tags.filter(tag=>typeof tag==='string').slice(0,30):[];
+  const extensions={tags,archived:!!safeExtra.archived,...(safeExtra.trend_note?{trend_note:String(safeExtra.trend_note)}:{}),
+    ...(safeExtra.trend_24h?{trend_24h:safeExtra.trend_24h}:{}),...(safeExtra.trend_7d?{trend_7d:safeExtra.trend_7d}:{})};
+  return {...extensions,...core,is_demo:!!core.is_demo,featured:!!core.featured,...(blocked?{
+    description:core.description==='来源已删除，介绍等待重新核查'?core.description:'来源权限已撤销或证据已撤回，介绍暂不展示',original_description:null,tags:[],archived:null,trend_note:'来源权限已撤销或证据已撤回，指标暂不展示',language:null,license:null,
+    website:null,docs_url:null,stars:null,delta_24h:null,delta_7d:null,trend_status:'incomparable',trend_24h:null,trend_7d:null,
+  }:{})};
+}
 export function getEvent(db, row) {
   if (!row) return null;
   return {...row,is_demo:!!row.is_demo,entity_name:db.prepare('SELECT name FROM entities WHERE id=?').get(row.entity_id)?.name,
     evidence_ids:liveEvidence(db,'event_evidence','event_id',row.id)};
 }
 export function getRelations(db, id, includePending=false) {
-  return db.prepare(`SELECT r.*,target.name AS name,target.name AS target_name,target.kind AS target_kind,source.name AS source_name,source.kind AS source_kind FROM relations r JOIN entities target ON target.id=r.target_entity_id JOIN entities source ON source.id=r.entity_id WHERE (r.entity_id=? OR r.target_entity_id=?) ${includePending?'':"AND r.status='confirmed'"}`).all(id,id).map(row=>({...row,related_entity_id:row.entity_id===id?row.target_entity_id:row.entity_id,related_name:row.entity_id===id?row.target_name:row.source_name,related_kind:row.entity_id===id?row.target_kind:row.source_kind,direction:row.entity_id===id?'outgoing':'incoming',evidence_ids:liveEvidence(db,'relation_evidence','relation_id',row.id)})).filter(r=>includePending||r.evidence_ids.length);
+  return db.prepare(`SELECT r.*,target.name AS name,target.name AS target_name,target.kind AS target_kind,source.name AS source_name,source.kind AS source_kind FROM relations r JOIN entities target ON target.id=r.target_entity_id JOIN entities source ON source.id=r.entity_id WHERE (r.entity_id=? OR r.target_entity_id=?) ${includePending?'':"AND r.status='confirmed'"}`).all(id,id).map(row=>{
+    const {reason,...publicRow}=row;
+    return {...(includePending?row:publicRow),related_entity_id:row.entity_id===id?row.target_entity_id:row.entity_id,related_name:row.entity_id===id?row.target_name:row.source_name,related_kind:row.entity_id===id?row.target_kind:row.source_kind,direction:row.entity_id===id?'outgoing':'incoming',evidence_ids:liveEvidence(db,'relation_evidence','relation_id',row.id)};
+  }).filter(r=>includePending||r.evidence_ids.length);
 }
 export function getEntity(db, id, {details=true,includePending=false}={}) {
-  const row = db.prepare(`SELECT * FROM entities WHERE id=? ${includePending?'':"AND review_status='published'"}`).get(id);
+  const row = db.prepare(`SELECT entities.*,${includePending?'0':metadataBlockedSQL()} AS metadata_blocked FROM entities WHERE id=? ${includePending?'':"AND review_status='published'"}`).get(id);
   if(!row) return null;
-  if(!includePending&&db.prepare("SELECT 1 FROM entity_evidence ee JOIN evidence ev ON ev.id=ee.evidence_id JOIN sources s ON s.id=ev.source_id WHERE ee.entity_id=? AND s.status='blocked' LIMIT 1").get(id)){
-    row.description='来源权限已撤销，介绍暂不展示';row.original_description=null;row.extra_json='{}';
-  }
-  const extra=json(row.extra_json,{}); delete row.extra_json;
-  const entity={...row,...extra,is_demo:!!row.is_demo,featured:!!row.featured,tags:extra.tags||[]};
+  const entity=publicEntityRow(row);
   if(!details) return entity;
   entity.editions=db.prepare("SELECT * FROM editions WHERE entity_id=? AND review_status='published'").all(id).map(e=>({...e,evidence_ids:liveEvidence(db,'edition_evidence','edition_id',e.id)})).filter(e=>e.evidence_ids.length);
   entity.assertions=db.prepare("SELECT * FROM assertions WHERE entity_id=? AND review_status='published'").all(id).map(a=>{
-    const evidence_ids=liveEvidence(db,'assertion_evidence','assertion_id',a.id);
-    return {...a,...(a.status!=='unknown'&&!evidence_ids.length?{status:'unknown',value:'缺少有效证据',scope:'原判断已暂停展示'}:{}),evidence_ids};
+    const evidence=evidenceSet(db,'assertion_evidence','assertion_id',a.id);
+    return {...a,...(!evidence.valid&&(a.status!=='unknown'||evidence.total)?{status:'unknown',value:'缺少有效证据',scope:'原判断已暂停展示'}:{}),evidence_ids:evidence.ids};
   });
   entity.relations=getRelations(db,id,includePending);
   entity.events=db.prepare(`SELECT * FROM events WHERE entity_id=? ${includePending?'':"AND review_status='published'"} ORDER BY observed_at DESC`).all(id).map(e=>getEvent(db,e)).filter(e=>includePending||e.evidence_ids.length);
-  entity.snapshots=db.prepare('SELECT stars,observed_at,source_id,metric_version,scope FROM snapshots WHERE entity_id=? ORDER BY observed_at ASC LIMIT 200').all(id);
+  entity.snapshots=db.prepare("SELECT * FROM (SELECT sn.stars,sn.observed_at,sn.source_id,sn.metric_version,sn.scope FROM snapshots sn JOIN sources s ON s.id=sn.source_id WHERE sn.entity_id=? AND s.status NOT IN ('blocked','revoked') ORDER BY sn.observed_at DESC LIMIT 200) ORDER BY observed_at ASC").all(id);
+  entity.content_status=getContentStatus(db,id);
+  const sourceIds=db.prepare('SELECT source_id FROM snapshots WHERE entity_id=? UNION SELECT source_id FROM evidence WHERE entity_id=?').all(id,id).map(source=>source.source_id).filter(Boolean);
+  entity.collection=getCollectionStatus(db,{sourceIds});
   return entity;
 }
 

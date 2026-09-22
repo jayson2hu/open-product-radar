@@ -36,10 +36,12 @@ function eligibleEvents(db, userId, { frequency = null, sinceRead = true } = {})
   const rows = db.prepare(`SELECT e.*,w.event_types,w.last_read_at,w.created_at AS watch_created_at,w.frequency
     FROM events e JOIN watches w ON w.entity_id=e.entity_id
     WHERE w.user_id=? AND w.paused=0 AND w.frequency<>'in_app' AND e.review_status IN ${published}
-    AND EXISTS(SELECT 1 FROM event_evidence ee JOIN evidence ev ON ev.id=ee.evidence_id
-      JOIN sources s ON s.id=ev.source_id WHERE ee.event_id=e.id
-      AND ev.review_status IN ${published} AND ev.permission_status IN ${permissions}
-      AND s.status IN ('active','approved') AND s.permission_status IN ${permissions})`).all(userId);
+    AND EXISTS(SELECT 1 FROM event_evidence required_link WHERE required_link.event_id=e.id)
+    AND NOT EXISTS(SELECT 1 FROM event_evidence ee LEFT JOIN evidence ev ON ev.id=ee.evidence_id
+      LEFT JOIN sources s ON s.id=ev.source_id WHERE ee.event_id=e.id
+      AND (ev.id IS NULL OR s.id IS NULL OR ev.review_status NOT IN ${published}
+        OR ev.permission_status NOT IN ${permissions} OR s.status NOT IN ('active','approved')
+        OR s.permission_status NOT IN ${permissions}))`).all(userId);
   return rows.filter(event => (!frequency || event.frequency === frequency) && (!parse(event.event_types).length || parse(event.event_types).includes(event.type)) &&
     (!sinceRead || (event.reviewed_at || event.observed_at) > (event.last_read_at || event.watch_created_at)));
 }

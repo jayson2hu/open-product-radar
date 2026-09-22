@@ -1,10 +1,14 @@
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 
+export function decodeRouteSegment(value) {
+  try { return decodeURIComponent(value); } catch { return null; }
+}
+
 export function trendPresentation(entity, period = '24h') {
   const windowName = period === '7d' ? '7 天' : '24 小时';
   const detail = period === '7d' ? entity.trend_7d : entity.trend_24h;
   const value = period === '7d' ? entity.delta_7d : entity.delta_24h;
-  const status = detail?.status || entity.trend_status;
+  const status = detail?.status || (period === '7d' && finite(value) ? 'comparable' : entity.trend_status);
   if (status === 'comparable' && finite(value)) {
     return { comparable: true, value, windowName, label: '已有增长对比', reason: '', description: `用最新 Star 总量减去约 ${windowName} 前的记录，得到这段时间的净变化。负数表示累计 Stars 减少。` };
   }
@@ -50,7 +54,7 @@ export function sortingPresentation(sort, entities, period, kind) {
   const effective = sort?.effective;
   if (effective === 'growth' && comparable > 0) return `${period === '7d' ? '7 天' : '24 小时'} Star 净变化`;
   if (effective === 'stars') return '当前 Star 总量';
-  if (effective === 'recent') return '最近收录时间';
+  if (effective === 'recent') return '最近观察时间';
   if (effective === 'name' || comparable === 0) return `${kind === 'product' ? '产品' : '项目'}名称 · 非增长排名`;
   return '按来源返回顺序浏览';
 }
